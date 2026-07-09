@@ -1,0 +1,39 @@
+@Application_Camion_API_HostAddress = http://localhost:5201
+
+GET {{Application_Camion_API_HostAddress}}/api/tournees
+Accept: application/json
+
+###
+
+POST {{Application_Camion_API_HostAddress}}/api/utilisateurs/login
+Content-Type: application/json
+
+{
+  "nom": "admin",
+  "motDePasse": "1234"
+}
+
+###
+
+POST {{Application_Camion_API_HostAddress}}/api/tournees
+Content-Type: application/json
+
+{
+  "etapes": [
+    {
+      "ordre": 1,
+      "garage": "Garage test",
+      "adresse": "1 rue de Paris",
+      "vehicules": [
+        {
+          "marque": "Renault",
+          "modele": "Clio",
+          "immatriculation": "AA-123-AA",
+          "recupere": false
+        }
+      ]
+    }
+  ]
+}
+
+###
