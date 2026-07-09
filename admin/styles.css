@@ -1,0 +1,560 @@
+:root {
+    color-scheme: light;
+    --bg: #f5f7fb;
+    --surface: #ffffff;
+    --surface-strong: #eef3f8;
+    --text: #17202a;
+    --muted: #617083;
+    --line: #d9e0ea;
+    --primary: #4c2fd8;
+    --primary-dark: #351ea5;
+    --accent: #087f5b;
+    --warning: #b7791f;
+    --danger: #b42318;
+    --shadow: 0 18px 40px rgba(18, 32, 54, 0.08);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    min-height: 100%;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
+}
+
+button,
+input,
+select {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.app-shell {
+    min-height: 100vh;
+}
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(12px);
+}
+
+.brand,
+.top-actions,
+.api-state,
+.section-head,
+.form-actions,
+.card-head,
+.row-actions,
+.tournee-meta,
+.metric-row {
+    display: flex;
+    align-items: center;
+}
+
+.brand {
+    gap: 12px;
+}
+
+.brand-mark {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border: 1px solid #b9c8da;
+    border-radius: 8px;
+    background: #dce9f7;
+    font-size: 24px;
+}
+
+.brand strong {
+    display: block;
+    font-size: 18px;
+}
+
+.brand span {
+    display: block;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.top-actions {
+    gap: 12px;
+}
+
+.api-state {
+    gap: 8px;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.state-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--warning);
+}
+
+.state-dot.online {
+    background: var(--accent);
+}
+
+.state-dot.offline {
+    background: var(--danger);
+}
+
+main {
+    width: min(1180px, calc(100vw - 28px));
+    margin: 0 auto;
+    padding: 24px 0 48px;
+}
+
+.login-view {
+    min-height: calc(100vh - 92px);
+    display: grid;
+    place-items: center;
+}
+
+.login-panel,
+.tool-panel,
+.tournee-card,
+.history-card,
+.modele-brand,
+.detail-dialog {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.login-panel {
+    display: grid;
+    gap: 18px;
+    width: min(420px, 100%);
+    padding: 26px;
+}
+
+.login-panel h1,
+.section-head h2,
+.dialog-head h2 {
+    margin: 0;
+}
+
+.eyebrow {
+    margin: 0 0 6px;
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+label {
+    display: grid;
+    gap: 7px;
+    color: #2a3543;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+input,
+select {
+    min-height: 42px;
+    width: 100%;
+    border: 1px solid #c8d2df;
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text);
+    padding: 9px 11px;
+}
+
+input:focus,
+select:focus {
+    outline: 3px solid rgba(76, 47, 216, 0.16);
+    border-color: var(--primary);
+}
+
+.primary-button,
+.secondary-button,
+.ghost-button,
+.danger-button {
+    min-height: 40px;
+    border-radius: 6px;
+    padding: 0 14px;
+    border: 1px solid transparent;
+    font-weight: 800;
+}
+
+.primary-button {
+    background: var(--primary);
+    color: #fff;
+}
+
+.primary-button:hover {
+    background: var(--primary-dark);
+}
+
+.secondary-button {
+    background: #e9f4ef;
+    color: #075f45;
+    border-color: #b8ded0;
+}
+
+.ghost-button {
+    background: #fff;
+    color: var(--text);
+    border-color: var(--line);
+}
+
+.danger-button {
+    background: #fff1f0;
+    color: var(--danger);
+    border-color: #ffc9c4;
+}
+
+.form-message {
+    min-height: 20px;
+    margin: 0;
+    color: var(--danger);
+    font-weight: 700;
+}
+
+.dashboard {
+    display: grid;
+    gap: 18px;
+}
+
+.tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--line);
+}
+
+.tab-button {
+    min-width: max-content;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    background: transparent;
+    padding: 12px 14px;
+    color: var(--muted);
+    font-weight: 900;
+}
+
+.tab-button.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: grid;
+    gap: 18px;
+}
+
+.section-head {
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.tool-panel {
+    display: grid;
+    gap: 18px;
+    padding: 18px;
+}
+
+.compact-panel {
+    box-shadow: none;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.five-cols {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.form-actions {
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.stack,
+.data-list {
+    display: grid;
+    gap: 14px;
+}
+
+.etape-card,
+.vehicule-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+}
+
+.etape-card {
+    padding: 16px;
+}
+
+.vehicule-card {
+    padding: 14px;
+    background: #fbfdff;
+}
+
+.card-head {
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.card-head h3,
+.card-head h4 {
+    margin: 0;
+}
+
+.vehicle-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.vehicule-specs,
+.tournee-meta,
+.metric-row,
+.small-note {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.vehicule-specs {
+    margin-top: 10px;
+}
+
+.metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.metric {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-strong);
+    padding: 12px;
+}
+
+.metric strong {
+    display: block;
+    font-size: 20px;
+}
+
+.metric span {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.tournee-card,
+.history-card {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    box-shadow: none;
+}
+
+.tournee-card h3,
+.history-card h3 {
+    margin: 0;
+}
+
+.tournee-meta {
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
+    border-radius: 999px;
+    background: #edf2ff;
+    color: #3541a5;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.badge.done {
+    background: #e6f6ef;
+    color: #087f5b;
+}
+
+.badge.warn {
+    background: #fff3d8;
+    color: var(--warning);
+}
+
+.row-actions {
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.model-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.modele-brand {
+    padding: 14px;
+    box-shadow: none;
+}
+
+.modele-brand h3 {
+    margin: 0 0 10px;
+}
+
+.modele-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.modele-table th,
+.modele-table td {
+    border-top: 1px solid var(--line);
+    padding: 9px 6px;
+    text-align: left;
+}
+
+.modele-table th {
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.detail-dialog {
+    width: min(860px, calc(100vw - 28px));
+    max-height: 86vh;
+    padding: 0;
+    overflow: hidden;
+}
+
+.detail-dialog::backdrop {
+    background: rgba(17, 24, 39, 0.42);
+}
+
+.dialog-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--line);
+}
+
+.detail-body {
+    display: grid;
+    gap: 14px;
+    max-height: calc(86vh - 74px);
+    overflow: auto;
+    padding: 18px;
+}
+
+.detail-body pre {
+    margin: 0;
+    overflow: auto;
+    border-radius: 8px;
+    background: #101828;
+    color: #edf2ff;
+    padding: 14px;
+    white-space: pre-wrap;
+}
+
+.toast {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 20;
+    max-width: min(420px, calc(100vw - 28px));
+    border-radius: 8px;
+    background: #111827;
+    color: #fff;
+    padding: 13px 15px;
+    box-shadow: var(--shadow);
+    font-weight: 800;
+}
+
+@media (max-width: 920px) {
+    .form-grid,
+    .five-cols,
+    .metrics,
+    .model-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .topbar,
+    .section-head {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .top-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
+@media (max-width: 560px) {
+    main {
+        width: min(100vw - 18px, 1180px);
+        padding-top: 14px;
+    }
+
+    .topbar {
+        padding: 12px 14px;
+    }
+
+    .brand-mark {
+        width: 38px;
+        height: 38px;
+    }
+
+    .tool-panel,
+    .login-panel,
+    .tournee-card,
+    .history-card {
+        padding: 14px;
+    }
+}

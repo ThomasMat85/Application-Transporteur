@@ -39,14 +39,27 @@ builder.Services.AddHttpClient();
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("LocalDevelopmentOnly", policy =>
+    options.AddPolicy("TransCarsFrontends", policy =>
     {
         policy
-            .WithOrigins(
-                "http://localhost:5201",
-                "https://localhost:7282",
-                "http://127.0.0.1:5201",
-                "https://127.0.0.1:7282")
+            .SetIsOriginAllowed(origin =>
+            {
+                if (string.IsNullOrWhiteSpace(origin) ||
+                    !Uri.TryCreate(origin, UriKind.Absolute, out Uri? uri))
+                {
+                    return false;
+                }
+
+                bool localhost =
+                    uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                    uri.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase);
+
+                bool renderStaticSite =
+                    uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) &&
+                    uri.Host.EndsWith(".onrender.com", StringComparison.OrdinalIgnoreCase);
+
+                return localhost || renderStaticSite;
+            })
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -85,7 +98,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseCors("LocalDevelopmentOnly");
+app.UseCors("TransCarsFrontends");
 
 
 app.UseAuthorization();

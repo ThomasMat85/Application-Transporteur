@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TransCars Admin</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true">&#128666;</div>
+                <div>
+                    <strong>Transport Auto</strong>
+                    <span>Console admin TransCars</span>
+                </div>
+            </div>
+            <div class="top-actions">
+                <div class="api-state">
+                    <span id="apiDot" class="state-dot"></span>
+                    <span id="apiText">API</span>
+                </div>
+                <button id="logoutBtn" class="ghost-button hidden" type="button">Quitter</button>
+            </div>
+        </header>
+
+        <main>
+            <section id="loginView" class="login-view">
+                <form id="loginForm" class="login-panel">
+                    <div>
+                        <p class="eyebrow">Connexion</p>
+                        <h1>TransCars Admin</h1>
+                    </div>
+                    <label>
+                        Identifiant
+                        <input id="loginName" name="nom" autocomplete="username" placeholder="admin" required>
+                    </label>
+                    <label>
+                        Mot de passe
+                        <input id="loginPassword" name="motDePasse" type="password" autocomplete="current-password" placeholder="1234" required>
+                    </label>
+                    <button class="primary-button" type="submit">Se connecter</button>
+                    <p id="loginMessage" class="form-message"></p>
+                </form>
+            </section>
+
+            <section id="dashboardView" class="dashboard hidden">
+                <nav class="tabs" aria-label="Navigation admin">
+                    <button class="tab-button active" type="button" data-tab="tournees">Tournees</button>
+                    <button class="tab-button" type="button" data-tab="formulaire">Creer / modifier</button>
+                    <button class="tab-button" type="button" data-tab="historique">Historique</button>
+                    <button class="tab-button" type="button" data-tab="modeles">Modeles</button>
+                </nav>
+
+                <section id="tab-tournees" class="tab-panel active">
+                    <div class="section-head">
+                        <div>
+                            <p class="eyebrow">Planning</p>
+                            <h2>Tournees</h2>
+                        </div>
+                        <button id="newTourneeBtn" class="primary-button" type="button">Nouvelle tournee</button>
+                    </div>
+                    <div id="tourneesList" class="data-list"></div>
+                </section>
+
+                <section id="tab-formulaire" class="tab-panel">
+                    <div class="section-head">
+                        <div>
+                            <p class="eyebrow">Preparation</p>
+                            <h2 id="formTitle">Creer une tournee</h2>
+                        </div>
+                        <button id="resetFormBtn" class="ghost-button" type="button">Reinitialiser</button>
+                    </div>
+
+                    <form id="tourneeForm" class="tool-panel">
+                        <div class="form-grid">
+                            <label>
+                                Code tournee
+                                <input id="codeInput" maxlength="12" placeholder="Auto">
+                            </label>
+                            <label>
+                                Camion
+                                <select id="camionSelect" required></select>
+                            </label>
+                        </div>
+
+                        <div id="capacityPreview" class="metrics"></div>
+
+                        <div class="form-actions">
+                            <button id="addEtapeBtn" class="secondary-button" type="button">Ajouter etape</button>
+                            <button class="primary-button" type="submit">Enregistrer</button>
+                        </div>
+
+                        <div id="etapesContainer" class="stack"></div>
+                    </form>
+                </section>
+
+                <section id="tab-historique" class="tab-panel">
+                    <div class="section-head">
+                        <div>
+                            <p class="eyebrow">Suivi</p>
+                            <h2>Historique chauffeur</h2>
+                        </div>
+                    </div>
+                    <div id="historiqueList" class="data-list"></div>
+                </section>
+
+                <section id="tab-modeles" class="tab-panel">
+                    <div class="section-head">
+                        <div>
+                            <p class="eyebrow">Catalogue</p>
+                            <h2>Modeles vehicules</h2>
+                        </div>
+                    </div>
+                    <form id="modeleForm" class="tool-panel compact-panel">
+                        <div class="form-grid five-cols">
+                            <label>
+                                Marque
+                                <input id="modeleMarque" required>
+                            </label>
+                            <label>
+                                Modele
+                                <input id="modeleNom" required>
+                            </label>
+                            <label>
+                                Longueur cm
+                                <input id="modeleLongueur" type="number" min="1" required>
+                            </label>
+                            <label>
+                                Largeur cm
+                                <input id="modeleLargeur" type="number" min="1" required>
+                            </label>
+                            <label>
+                                Hauteur cm
+                                <input id="modeleHauteur" type="number" min="1" required>
+                            </label>
+                            <label>
+                                Poids kg
+                                <input id="modelePoids" type="number" min="1" required>
+                            </label>
+                        </div>
+                        <button class="primary-button" type="submit">Ajouter modele</button>
+                    </form>
+                    <div id="modelesList" class="model-grid"></div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <dialog id="detailDialog" class="detail-dialog">
+        <div class="dialog-head">
+            <h2 id="detailTitle">Detail tournee</h2>
+            <button id="closeDialogBtn" class="ghost-button" type="button">Fermer</button>
+        </div>
+        <div id="detailBody" class="detail-body"></div>
+    </dialog>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="app.js"></script>
+</body>
+</html>
