@@ -14,6 +14,7 @@ namespace Application_Camion_API.Controllers;
 public class TourneesController : ControllerBase
 {
     private const double CoutKmParVehiculeCharge = 0.25;
+    private const double DistanceRegroupementChargementKm = 15;
 
     private readonly ApplicationDbContext _context;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -457,7 +458,11 @@ public class TourneesController : ControllerBase
             double nouvelleDistance = distanceActuelle + distance;
             double nouveauScore =
                 scoreActuel +
-                CalculerScoreSegment(distance, vehiculesCharges.Count);
+                CalculerScoreSegment(
+                    distance,
+                    vehiculesCharges.Count,
+                    positionCle,
+                    candidat);
 
             if (nouveauScore >= meilleure.ScoreTotal)
                 continue;
@@ -524,6 +529,7 @@ public class TourneesController : ControllerBase
         var vehiculesCharges = new List<Vehicule>();
         var arrets = new List<CandidatOptimisation>();
         Coordonnees? positionActuelle = coordonneesDepartRetour;
+        string positionCle = "DEPOT";
         double distanceTotale = 0;
         double scoreTotal = 0;
 
@@ -543,7 +549,18 @@ public class TourneesController : ControllerBase
                 break;
 
             CandidatOptimisation choisi = candidats
-                .OrderBy(c => CalculerDistanceKmNullable(positionActuelle, c.Coordonnees))
+                .OrderBy(c =>
+                {
+                    double distanceCandidat =
+                        CalculerDistanceKmNullable(positionActuelle, c.Coordonnees);
+
+                    return CalculerScoreSegment(
+                        distanceCandidat,
+                        vehiculesCharges.Count,
+                        positionCle,
+                        c);
+                })
+                .ThenBy(c => CalculerDistanceKmNullable(positionActuelle, c.Coordonnees))
                 .ThenBy(c => c.Type == "Livraison" ? 0 : 1)
                 .ThenBy(c => c.Etape?.Ordre ?? int.MaxValue)
                 .First();
@@ -552,7 +569,11 @@ public class TourneesController : ControllerBase
                 CalculerDistanceKmNullable(positionActuelle, choisi.Coordonnees);
 
             distanceTotale += distance;
-            scoreTotal += CalculerScoreSegment(distance, vehiculesCharges.Count);
+            scoreTotal += CalculerScoreSegment(
+                distance,
+                vehiculesCharges.Count,
+                positionCle,
+                choisi);
 
             CandidatOptimisation arret =
                 CopierCandidat(choisi);
@@ -578,6 +599,7 @@ public class TourneesController : ControllerBase
             }
 
             positionActuelle = choisi.Coordonnees;
+            positionCle = choisi.Cle;
         }
 
         if (!string.IsNullOrWhiteSpace(adresseDepartRetour))
@@ -720,6 +742,22 @@ public class TourneesController : ControllerBase
         int nombreVehiculesCharges)
     {
         return distanceKm * (1 + Math.Max(0, nombreVehiculesCharges) * CoutKmParVehiculeCharge);
+    }
+
+    private static double CalculerScoreSegment(
+        double distanceKm,
+        int nombreVehiculesCharges,
+        string positionCle,
+        CandidatOptimisation candidat)
+    {
+        bool chargementLocal =
+            candidat.Type == "Chargement" &&
+            positionCle.StartsWith("C:", StringComparison.OrdinalIgnoreCase) &&
+            distanceKm <= DistanceRegroupementChargementKm;
+
+        return CalculerScoreSegment(
+            distanceKm,
+            chargementLocal ? 0 : nombreVehiculesCharges);
     }
 
     private async Task AppliquerOptimisationAsync(Tournee tournee)
