@@ -142,6 +142,11 @@ namespace Application_Camion_API.Migrations
                     b.Property<int?>("CamionPorteurId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("AdresseDepartRetour")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
+
                     b.Property<string>("CodeUnique")
                         .IsRequired()
                         .HasColumnType("text");

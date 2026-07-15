@@ -6,6 +6,8 @@ public class CreateTourneeDto
 
     public bool Terminee { get; set; }
 
+    public string AdresseDepartRetour { get; set; } = "";
+
     public int? CamionPorteurId { get; set; }
 
     public List<CreateEtapeDto> Etapes { get; set; } = new();

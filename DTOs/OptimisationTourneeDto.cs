@@ -6,6 +6,8 @@ public class OptimisationTourneeDto
 
     public string CodeUnique { get; set; } = "";
 
+    public string AdresseDepartRetour { get; set; } = "";
+
     public double DistanceApproxKm { get; set; }
 
     public List<OptimisationArretDto> Arrets { get; set; } = new();

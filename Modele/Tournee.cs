@@ -12,6 +12,8 @@
 
         public string PlanOptimise { get; set; } = string.Empty;
 
+        public string AdresseDepartRetour { get; set; } = string.Empty;
+
         public int? CamionPorteurId { get; set; }
 
         public CamionPorteur? CamionPorteur { get; set; }

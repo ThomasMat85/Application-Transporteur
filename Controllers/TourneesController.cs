@@ -102,6 +102,7 @@ public class TourneesController : ControllerBase
             CodeUnique = code,
             DateCreation = DateTime.UtcNow,
             Terminee = request.Terminee,
+            AdresseDepartRetour = (request.AdresseDepartRetour ?? "").Trim(),
             CamionPorteurId = request.CamionPorteurId,
             Etapes = requestedEtapes
                 .OrderBy(e => e.Ordre)
@@ -181,6 +182,7 @@ public class TourneesController : ControllerBase
         _context.Etapes.RemoveRange(tournee.Etapes);
 
         tournee.Terminee = request.Terminee;
+        tournee.AdresseDepartRetour = (request.AdresseDepartRetour ?? "").Trim();
         tournee.Etapes = requestedEtapes
             .OrderBy(e => e.Ordre)
             .Select(e => new Etape
@@ -228,182 +230,471 @@ public class TourneesController : ControllerBase
         var resultat = new OptimisationTourneeDto
         {
             TourneeId = tournee.Id,
-            CodeUnique = tournee.CodeUnique
+            CodeUnique = tournee.CodeUnique,
+            AdresseDepartRetour = tournee.AdresseDepartRetour
         };
 
         resultat.Alertes.Add(
             "Optimisation indicative : elle aide a preparer l'ordre, mais le chauffeur garde la decision finale sur le terrain.");
 
         resultat.Alertes.Add(
-            "Les livraisons deja chargees sont priorisees quand elles restent dans une distance raisonnable.");
+            "L'optimisation tient compte du point depart / retour quand il est renseigne.");
 
-        var etapesRestantes = tournee.Etapes
+        var etapes = tournee.Etapes
             .OrderBy(e => e.Ordre)
             .ToList();
 
-        var vehiculesCharges = new List<Vehicule>();
         var coordonneesCache = new Dictionary<string, Coordonnees?>();
-        Coordonnees? positionActuelle = null;
-        int ordre = 1;
-        double distanceTotale = 0;
+        var coordonneesEtapes = new Dictionary<int, Coordonnees?>();
+        var coordonneesLivraisons =
+            new Dictionary<string, Coordonnees?>(StringComparer.OrdinalIgnoreCase);
 
-        while (etapesRestantes.Count > 0 || vehiculesCharges.Count > 0)
+        Coordonnees? coordonneesDepartRetour =
+            await GeocoderAsync(tournee.AdresseDepartRetour, coordonneesCache);
+
+        if (!string.IsNullOrWhiteSpace(tournee.AdresseDepartRetour) &&
+            coordonneesDepartRetour == null)
         {
-            var candidats = new List<CandidatOptimisation>();
+            resultat.Alertes.Add(
+                "Le point depart / retour n'a pas pu etre geocode, il est affiche mais pas chiffre.");
+        }
 
-            foreach (var etape in etapesRestantes)
-            {
-                candidats.Add(new CandidatOptimisation
-                {
-                    Type = "Chargement",
-                    Nom = string.IsNullOrWhiteSpace(etape.Garage) ? $"Etape {etape.Ordre}" : etape.Garage,
-                    Adresse = etape.Adresse,
-                    Vehicules = etape.Vehicules.ToList(),
-                    Etape = etape
-                });
-            }
+        foreach (Etape etape in etapes)
+        {
+            coordonneesEtapes[etape.Id] =
+                await GeocoderAsync(etape.Adresse, coordonneesCache);
+        }
 
-            foreach (var livraison in vehiculesCharges
-                .Where(v => !string.IsNullOrWhiteSpace(v.AdresseLivraison))
-                .GroupBy(v => v.AdresseLivraison.Trim()))
-            {
-                candidats.Add(new CandidatOptimisation
-                {
-                    Type = "Livraison",
-                    Nom = string.Join(", ", livraison
-                        .Select(v => v.ClientLivraison)
-                        .Where(c => !string.IsNullOrWhiteSpace(c))
-                        .Distinct()),
-                    Adresse = livraison.Key,
-                    Vehicules = livraison.ToList()
-                });
-            }
+        foreach (string adresseLivraison in etapes
+            .SelectMany(e => e.Vehicules)
+            .Select(v => (v.AdresseLivraison ?? "").Trim())
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            coordonneesLivraisons[adresseLivraison] =
+                await GeocoderAsync(adresseLivraison, coordonneesCache);
+        }
 
-            if (candidats.Count == 0)
-            {
-                resultat.Alertes.Add(
-                    "Certains vehicules n'ont pas d'adresse de livraison, impossible de les optimiser automatiquement.");
-                break;
-            }
+        SolutionOptimisation solution =
+            ConstruireRouteOptimale(
+                etapes,
+                tournee.AdresseDepartRetour,
+                coordonneesDepartRetour,
+                coordonneesEtapes,
+                coordonneesLivraisons);
 
-            foreach (var candidat in candidats)
-            {
-                candidat.Coordonnees =
-                    await GeocoderAsync(candidat.Adresse, coordonneesCache);
+        int ordre = 1;
 
-                candidat.DistanceDepuisPrecedentKm =
-                    positionActuelle == null || candidat.Coordonnees == null
-                    ? 0
-                    : CalculerDistanceKm(positionActuelle, candidat.Coordonnees);
-            }
-
-            var choisi = ChoisirProchainArret(candidats, positionActuelle);
+        foreach (CandidatOptimisation arret in solution.Arrets)
+        {
+            arret.Ordre = ordre++;
 
             resultat.Arrets.Add(new OptimisationArretDto
             {
-                EtapeId = choisi.Etape?.Id,
-                Ordre = ordre++,
-                Type = choisi.Type,
-                Nom = choisi.Nom,
-                Adresse = choisi.Adresse,
-                DistanceDepuisPrecedentKm = Math.Round(choisi.DistanceDepuisPrecedentKm, 1),
-                Vehicules = choisi.Vehicules
+                EtapeId = arret.Etape?.Id,
+                Ordre = arret.Ordre,
+                Type = arret.Type,
+                Nom = arret.Nom,
+                Adresse = arret.Adresse,
+                DistanceDepuisPrecedentKm = Math.Round(arret.DistanceDepuisPrecedentKm, 1),
+                Vehicules = arret.Vehicules
                     .Select(ConstruireNomVehicule)
                     .ToList()
             });
-
-            distanceTotale += choisi.DistanceDepuisPrecedentKm;
-
-            if (choisi.Coordonnees != null)
-                positionActuelle = choisi.Coordonnees;
-
-            if (choisi.Type == "Chargement" && choisi.Etape != null)
-            {
-                etapesRestantes.Remove(choisi.Etape);
-                vehiculesCharges.AddRange(choisi.Etape.Vehicules);
-            }
-            else
-            {
-                foreach (var vehicule in choisi.Vehicules)
-                {
-                    vehiculesCharges.Remove(vehicule);
-                }
-            }
         }
 
-        resultat.DistanceApproxKm = Math.Round(distanceTotale, 1);
+        resultat.DistanceApproxKm = Math.Round(solution.DistanceTotaleKm, 1);
         resultat.Chargement = CreerPlanChargement(tournee);
 
         return resultat;
     }
 
-    private static CandidatOptimisation ChoisirProchainArret(
-        List<CandidatOptimisation> candidats,
-        Coordonnees? positionActuelle)
+    private static SolutionOptimisation ConstruireRouteOptimale(
+        List<Etape> etapes,
+        string adresseDepartRetour,
+        Coordonnees? coordonneesDepartRetour,
+        Dictionary<int, Coordonnees?> coordonneesEtapes,
+        Dictionary<string, Coordonnees?> coordonneesLivraisons)
     {
-        if (positionActuelle != null)
+        SolutionOptimisation meilleure =
+            ConstruireRouteGloutonne(
+                etapes,
+                adresseDepartRetour,
+                coordonneesDepartRetour,
+                coordonneesEtapes,
+                coordonneesLivraisons);
+
+        var etapesChargees = new HashSet<int>();
+        var vehiculesCharges = new List<Vehicule>();
+        var route = new List<CandidatOptimisation>();
+        var memoire = new Dictionary<string, double>();
+        int visites = 0;
+        const int limiteVisites = 250000;
+
+        ChercherMeilleureRoute(
+            etapes,
+            adresseDepartRetour,
+            coordonneesDepartRetour,
+            coordonneesEtapes,
+            coordonneesLivraisons,
+            etapesChargees,
+            vehiculesCharges,
+            coordonneesDepartRetour,
+            "DEPOT",
+            0,
+            route,
+            memoire,
+            ref meilleure,
+            ref visites,
+            limiteVisites);
+
+        return meilleure;
+    }
+
+    private static void ChercherMeilleureRoute(
+        List<Etape> etapes,
+        string adresseDepartRetour,
+        Coordonnees? coordonneesDepartRetour,
+        Dictionary<int, Coordonnees?> coordonneesEtapes,
+        Dictionary<string, Coordonnees?> coordonneesLivraisons,
+        HashSet<int> etapesChargees,
+        List<Vehicule> vehiculesCharges,
+        Coordonnees? positionActuelle,
+        string positionCle,
+        double distanceActuelle,
+        List<CandidatOptimisation> route,
+        Dictionary<string, double> memoire,
+        ref SolutionOptimisation meilleure,
+        ref int visites,
+        int limiteVisites)
+    {
+        if (visites++ > limiteVisites)
+            return;
+
+        if (distanceActuelle >= meilleure.DistanceTotaleKm)
+            return;
+
+        string etatCle =
+            ConstruireCleEtat(positionCle, etapesChargees, vehiculesCharges);
+
+        if (memoire.TryGetValue(etatCle, out double distanceDejaVue) &&
+            distanceDejaVue <= distanceActuelle)
         {
-            var livraisons = candidats
-                .Where(c => c.Type == "Livraison")
-                .ToList();
-
-            if (livraisons.Count > 0)
-            {
-                var meilleureLivraison =
-                    TrierCandidats(livraisons).First();
-
-                var chargements = candidats
-                    .Where(c => c.Type == "Chargement")
-                    .ToList();
-
-                if (chargements.Count == 0)
-                    return meilleureLivraison;
-
-                var meilleurChargement =
-                    TrierCandidats(chargements).First();
-
-                if (DoitPrioriserLivraison(
-                    meilleureLivraison,
-                    meilleurChargement))
-                {
-                    return meilleureLivraison;
-                }
-            }
+            return;
         }
 
-        return TrierCandidats(candidats).First();
-    }
+        memoire[etatCle] = distanceActuelle;
 
-    private static IOrderedEnumerable<CandidatOptimisation> TrierCandidats(
-        IEnumerable<CandidatOptimisation> candidats)
-    {
-        return candidats
-            .OrderBy(c => c.Coordonnees == null ? 1 : 0)
-            .ThenBy(c => c.DistanceDepuisPrecedentKm)
+        if (etapesChargees.Count == etapes.Count &&
+            vehiculesCharges.Count == 0)
+        {
+            double distanceRetour =
+                string.IsNullOrWhiteSpace(adresseDepartRetour)
+                    ? 0
+                    : CalculerDistanceKmNullable(
+                        positionActuelle,
+                        coordonneesDepartRetour);
+
+            double distanceTotale = distanceActuelle + distanceRetour;
+
+            if (distanceTotale < meilleure.DistanceTotaleKm)
+            {
+                var arrets = route
+                    .Select(CopierCandidat)
+                    .ToList();
+
+                if (!string.IsNullOrWhiteSpace(adresseDepartRetour))
+                {
+                    arrets.Add(new CandidatOptimisation
+                    {
+                        Cle = "DEPOT",
+                        Type = "Retour",
+                        Nom = "Domicile camionneur",
+                        Adresse = adresseDepartRetour,
+                        Coordonnees = coordonneesDepartRetour,
+                        DistanceDepuisPrecedentKm = distanceRetour
+                    });
+                }
+
+                meilleure = new SolutionOptimisation
+                {
+                    DistanceTotaleKm = distanceTotale,
+                    Arrets = arrets
+                };
+            }
+
+            return;
+        }
+
+        List<CandidatOptimisation> candidats =
+            CreerCandidatsRoute(
+                etapes,
+                etapesChargees,
+                vehiculesCharges,
+                adresseDepartRetour,
+                coordonneesEtapes,
+                coordonneesLivraisons);
+
+        foreach (CandidatOptimisation candidat in candidats
+            .OrderBy(c => CalculerDistanceKmNullable(positionActuelle, c.Coordonnees))
             .ThenBy(c => c.Type == "Livraison" ? 0 : 1)
-            .ThenBy(c => c.Nom);
+            .ThenBy(c => c.Etape?.Ordre ?? int.MaxValue)
+            .ThenBy(c => c.Nom))
+        {
+            double distance =
+                CalculerDistanceKmNullable(positionActuelle, candidat.Coordonnees);
+
+            double nouvelleDistance = distanceActuelle + distance;
+
+            if (nouvelleDistance >= meilleure.DistanceTotaleKm)
+                continue;
+
+            var prochainesEtapesChargees =
+                new HashSet<int>(etapesChargees);
+
+            var prochainsVehiculesCharges =
+                vehiculesCharges.ToList();
+
+            if (candidat.Type == "Chargement" && candidat.Etape != null)
+            {
+                prochainesEtapesChargees.Add(candidat.Etape.Id);
+                prochainsVehiculesCharges.AddRange(candidat.Etape.Vehicules);
+            }
+            else if (candidat.Type == "Livraison")
+            {
+                var idsLivres = candidat.Vehicules
+                    .Select(v => v.Id)
+                    .ToHashSet();
+
+                prochainsVehiculesCharges =
+                    prochainsVehiculesCharges
+                        .Where(v => !idsLivres.Contains(v.Id))
+                        .ToList();
+            }
+
+            CandidatOptimisation arret =
+                CopierCandidat(candidat);
+
+            arret.DistanceDepuisPrecedentKm = distance;
+            route.Add(arret);
+
+            ChercherMeilleureRoute(
+                etapes,
+                adresseDepartRetour,
+                coordonneesDepartRetour,
+                coordonneesEtapes,
+                coordonneesLivraisons,
+                prochainesEtapesChargees,
+                prochainsVehiculesCharges,
+                candidat.Coordonnees,
+                candidat.Cle,
+                nouvelleDistance,
+                route,
+                memoire,
+                ref meilleure,
+                ref visites,
+                limiteVisites);
+
+            route.RemoveAt(route.Count - 1);
+        }
     }
 
-    private static bool DoitPrioriserLivraison(
-        CandidatOptimisation livraison,
-        CandidatOptimisation chargement)
+    private static SolutionOptimisation ConstruireRouteGloutonne(
+        List<Etape> etapes,
+        string adresseDepartRetour,
+        Coordonnees? coordonneesDepartRetour,
+        Dictionary<int, Coordonnees?> coordonneesEtapes,
+        Dictionary<string, Coordonnees?> coordonneesLivraisons)
     {
-        if (livraison.Coordonnees != null && chargement.Coordonnees == null)
-            return true;
+        var etapesChargees = new HashSet<int>();
+        var vehiculesCharges = new List<Vehicule>();
+        var arrets = new List<CandidatOptimisation>();
+        Coordonnees? positionActuelle = coordonneesDepartRetour;
+        double distanceTotale = 0;
 
-        if (livraison.Coordonnees == null && chargement.Coordonnees != null)
-            return false;
+        while (etapesChargees.Count < etapes.Count ||
+            vehiculesCharges.Count > 0)
+        {
+            List<CandidatOptimisation> candidats =
+                CreerCandidatsRoute(
+                    etapes,
+                    etapesChargees,
+                    vehiculesCharges,
+                    adresseDepartRetour,
+                    coordonneesEtapes,
+                    coordonneesLivraisons);
 
-        if (livraison.Coordonnees == null && chargement.Coordonnees == null)
-            return true;
+            if (candidats.Count == 0)
+                break;
 
-        const double ratioDetourAcceptable = 1.35;
+            CandidatOptimisation choisi = candidats
+                .OrderBy(c => CalculerDistanceKmNullable(positionActuelle, c.Coordonnees))
+                .ThenBy(c => c.Type == "Livraison" ? 0 : 1)
+                .ThenBy(c => c.Etape?.Ordre ?? int.MaxValue)
+                .First();
 
-        if (chargement.DistanceDepuisPrecedentKm <= 0.1)
-            return livraison.DistanceDepuisPrecedentKm <= 2;
+            double distance =
+                CalculerDistanceKmNullable(positionActuelle, choisi.Coordonnees);
 
-        return livraison.DistanceDepuisPrecedentKm <=
-            chargement.DistanceDepuisPrecedentKm * ratioDetourAcceptable;
+            distanceTotale += distance;
+
+            CandidatOptimisation arret =
+                CopierCandidat(choisi);
+
+            arret.DistanceDepuisPrecedentKm = distance;
+            arrets.Add(arret);
+
+            if (choisi.Type == "Chargement" && choisi.Etape != null)
+            {
+                etapesChargees.Add(choisi.Etape.Id);
+                vehiculesCharges.AddRange(choisi.Etape.Vehicules);
+            }
+            else if (choisi.Type == "Livraison")
+            {
+                var idsLivres = choisi.Vehicules
+                    .Select(v => v.Id)
+                    .ToHashSet();
+
+                vehiculesCharges =
+                    vehiculesCharges
+                        .Where(v => !idsLivres.Contains(v.Id))
+                        .ToList();
+            }
+
+            positionActuelle = choisi.Coordonnees;
+        }
+
+        if (!string.IsNullOrWhiteSpace(adresseDepartRetour))
+        {
+            double retour =
+                CalculerDistanceKmNullable(positionActuelle, coordonneesDepartRetour);
+
+            distanceTotale += retour;
+
+            arrets.Add(new CandidatOptimisation
+            {
+                Cle = "DEPOT",
+                Type = "Retour",
+                Nom = "Domicile camionneur",
+                Adresse = adresseDepartRetour,
+                Coordonnees = coordonneesDepartRetour,
+                DistanceDepuisPrecedentKm = retour
+            });
+        }
+
+        return new SolutionOptimisation
+        {
+            DistanceTotaleKm = distanceTotale,
+            Arrets = arrets
+        };
+    }
+
+    private static List<CandidatOptimisation> CreerCandidatsRoute(
+        List<Etape> etapes,
+        HashSet<int> etapesChargees,
+        List<Vehicule> vehiculesCharges,
+        string adresseDepartRetour,
+        Dictionary<int, Coordonnees?> coordonneesEtapes,
+        Dictionary<string, Coordonnees?> coordonneesLivraisons)
+    {
+        var candidats = new List<CandidatOptimisation>();
+
+        var etapesRestantes = etapes
+            .Where(e => !etapesChargees.Contains(e.Id))
+            .OrderBy(e => e.Ordre)
+            .ToList();
+
+        if (string.IsNullOrWhiteSpace(adresseDepartRetour) &&
+            etapesChargees.Count == 0 &&
+            etapesRestantes.Count > 0)
+        {
+            etapesRestantes = etapesRestantes
+                .Take(1)
+                .ToList();
+        }
+
+        foreach (Etape etape in etapesRestantes)
+        {
+            candidats.Add(new CandidatOptimisation
+            {
+                Cle = $"C:{etape.Id}",
+                Type = "Chargement",
+                Nom = string.IsNullOrWhiteSpace(etape.Garage)
+                    ? $"Etape {etape.Ordre}"
+                    : etape.Garage,
+                Adresse = etape.Adresse,
+                Vehicules = etape.Vehicules.ToList(),
+                Etape = etape,
+                Coordonnees = coordonneesEtapes.TryGetValue(etape.Id, out Coordonnees? coordonnees)
+                    ? coordonnees
+                    : null
+            });
+        }
+
+        foreach (var livraison in vehiculesCharges
+            .Where(v => !string.IsNullOrWhiteSpace(v.AdresseLivraison))
+            .GroupBy(v => v.AdresseLivraison.Trim(), StringComparer.OrdinalIgnoreCase))
+        {
+            candidats.Add(new CandidatOptimisation
+            {
+                Cle = $"L:{livraison.Key.ToUpperInvariant()}",
+                Type = "Livraison",
+                Nom = string.Join(", ", livraison
+                    .Select(v => v.ClientLivraison)
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)),
+                Adresse = livraison.Key,
+                Vehicules = livraison.ToList(),
+                Coordonnees = coordonneesLivraisons.TryGetValue(livraison.Key, out Coordonnees? coordonnees)
+                    ? coordonnees
+                    : null
+            });
+        }
+
+        return candidats;
+    }
+
+    private static string ConstruireCleEtat(
+        string positionCle,
+        HashSet<int> etapesChargees,
+        List<Vehicule> vehiculesCharges)
+    {
+        string etapes = string.Join(
+            ",",
+            etapesChargees.OrderBy(id => id));
+
+        string vehicules = string.Join(
+            ",",
+            vehiculesCharges.Select(v => v.Id).OrderBy(id => id));
+
+        return $"{positionCle}|E:{etapes}|V:{vehicules}";
+    }
+
+    private static CandidatOptimisation CopierCandidat(
+        CandidatOptimisation candidat)
+    {
+        return new CandidatOptimisation
+        {
+            Cle = candidat.Cle,
+            Ordre = candidat.Ordre,
+            Type = candidat.Type,
+            Nom = candidat.Nom,
+            Adresse = candidat.Adresse,
+            Vehicules = candidat.Vehicules.ToList(),
+            Etape = candidat.Etape,
+            Coordonnees = candidat.Coordonnees,
+            DistanceDepuisPrecedentKm = candidat.DistanceDepuisPrecedentKm
+        };
+    }
+
+    private static double CalculerDistanceKmNullable(
+        Coordonnees? depart,
+        Coordonnees? arrivee)
+    {
+        if (depart == null || arrivee == null)
+            return 0;
+
+        return CalculerDistanceKm(depart, arrivee);
     }
 
     private async Task AppliquerOptimisationAsync(Tournee tournee)
@@ -415,28 +706,6 @@ public class TourneesController : ControllerBase
 
             tournee.PlanOptimise =
                 ConstruirePlanOptimiseTexte(optimisation);
-
-            var etapesOrdonnees = optimisation.Arrets
-                .Where(a => a.Type == "Chargement" && a.EtapeId.HasValue)
-                .Select(a => a.EtapeId!.Value)
-                .ToList();
-
-            int ordre = 1;
-
-            foreach (int etapeId in etapesOrdonnees)
-            {
-                var etape = tournee.Etapes.FirstOrDefault(e => e.Id == etapeId);
-
-                if (etape != null)
-                    etape.Ordre = ordre++;
-            }
-
-            foreach (var etape in tournee.Etapes
-                .Where(e => !etapesOrdonnees.Contains(e.Id))
-                .OrderBy(e => e.Ordre))
-            {
-                etape.Ordre = ordre++;
-            }
 
             await _context.SaveChangesAsync();
         }
@@ -454,7 +723,7 @@ public class TourneesController : ControllerBase
         if (string.IsNullOrWhiteSpace(tournee.PlanOptimise) ||
             !tournee.PlanOptimise.Contains("Ordre de chargement camion") ||
             !tournee.PlanOptimise.Contains("premiere livraison sur etage 1") ||
-            !tournee.PlanOptimise.Contains("livraisons deja chargees"))
+            !tournee.PlanOptimise.Contains("point depart / retour"))
         {
             await AppliquerOptimisationAsync(tournee);
         }
@@ -725,6 +994,10 @@ public class TourneesController : ControllerBase
 
         builder.AppendLine("Ordre conseille chauffeur :");
         builder.AppendLine($"Distance approx. : {optimisation.DistanceApproxKm:0.0} km");
+
+        if (!string.IsNullOrWhiteSpace(optimisation.AdresseDepartRetour))
+            builder.AppendLine($"Depart / retour : {optimisation.AdresseDepartRetour}");
+
         builder.AppendLine();
 
         foreach (OptimisationArretDto arret in optimisation.Arrets)
@@ -760,7 +1033,7 @@ public class TourneesController : ControllerBase
             builder.AppendLine();
             builder.AppendLine("Ordre de chargement camion :");
             builder.AppendLine("Principe : garder la premiere livraison sur etage 1, puis charger l'etage 2 en priorite.");
-            builder.AppendLine("La route favorise une livraison deja chargee si elle reste dans une distance raisonnable.");
+            builder.AppendLine("La route est optimisee depuis le point depart / retour du chauffeur.");
             builder.AppendLine("A un meme chargement, le vehicule livre le plus tard est place avant celui qui sort plus tot.");
 
             for (int i = 0; i < ordreChargement.Count; i++)
@@ -912,6 +1185,10 @@ public class TourneesController : ControllerBase
 
     private sealed class CandidatOptimisation
     {
+        public string Cle { get; set; } = "";
+
+        public int Ordre { get; set; }
+
         public string Type { get; set; } = "";
 
         public string Nom { get; set; } = "";
@@ -925,6 +1202,13 @@ public class TourneesController : ControllerBase
         public Coordonnees? Coordonnees { get; set; }
 
         public double DistanceDepuisPrecedentKm { get; set; }
+    }
+
+    private sealed class SolutionOptimisation
+    {
+        public double DistanceTotaleKm { get; set; } = double.MaxValue;
+
+        public List<CandidatOptimisation> Arrets { get; set; } = new();
     }
 
     private sealed class VehiculeACharger
