@@ -36,6 +36,9 @@ function bindEvents() {
     });
     $("#tourneeForm").addEventListener("submit", saveTournee);
     $("#modeleForm").addEventListener("submit", saveModele);
+    $("#adresseDepartRetourInput").addEventListener("input", (event) => {
+        scheduleAddressSuggestions(event.target);
+    });
     $("#etapesContainer").addEventListener("input", handleEtapeInput);
     $("#etapesContainer").addEventListener("change", handleEtapeChange);
     $("#etapesContainer").addEventListener("click", handleEtapeClick);
@@ -279,6 +282,7 @@ function resetTourneeForm() {
     state.etapes = [createEtape()];
     $("#formTitle").textContent = "Creer une tournee";
     $("#codeInput").value = "";
+    $("#adresseDepartRetourInput").value = "";
     $("#codeInput").disabled = false;
     $("#camionSelect").disabled = false;
     renderEtapes();
@@ -542,6 +546,7 @@ async function saveTournee(event) {
                 method: "PUT",
                 body: JSON.stringify({
                     terminee: state.editingTerminee,
+                    adresseDepartRetour: $("#adresseDepartRetourInput").value.trim(),
                     etapes: payloadEtapes
                 })
             });
@@ -551,6 +556,7 @@ async function saveTournee(event) {
                 body: JSON.stringify({
                     codeUnique: $("#codeInput").value.trim() || null,
                     terminee: false,
+                    adresseDepartRetour: $("#adresseDepartRetourInput").value.trim(),
                     camionPorteurId,
                     etapes: payloadEtapes
                 })
@@ -635,6 +641,7 @@ function loadTourneeIntoForm(tournee) {
 
     $("#formTitle").textContent = `Modifier ${tournee.codeUnique}`;
     $("#codeInput").value = tournee.codeUnique;
+    $("#adresseDepartRetourInput").value = tournee.adresseDepartRetour || "";
     $("#codeInput").disabled = true;
     $("#camionSelect").value = tournee.camionPorteurId || "";
     $("#camionSelect").disabled = true;
@@ -694,6 +701,7 @@ function renderDetailBody(tournee, optimisation, chargement) {
             <div class="metric"><strong>${getVehicules(tournee).length}</strong><span>Vehicules</span></div>
             <div class="metric"><strong>${tournee.terminee ? "Oui" : "Non"}</strong><span>Terminee</span></div>
         </div>
+        ${tournee.adresseDepartRetour ? `<p class="small-note">Depart / retour : ${escapeHtml(tournee.adresseDepartRetour)}</p>` : ""}
         ${chargementHtml}
         <section class="stack">${arrets}</section>
         <pre>${escapeHtml(tournee.planOptimise || "Plan optimise en cours de calcul.")}</pre>

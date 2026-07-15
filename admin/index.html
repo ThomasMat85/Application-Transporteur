@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>TransCars Admin</title>
-    <link rel="stylesheet" href="styles.css?v=20260709-2">
+    <link rel="stylesheet" href="styles.css?v=20260715-1">
 </head>
 <body>
     <div class="app-shell">
@@ -83,6 +83,11 @@
                                 Camion
                                 <select id="camionSelect" required></select>
                             </label>
+                            <label class="wide-field">
+                                Depart / retour chauffeur
+                                <input id="adresseDepartRetourInput" list="adresse-depart-retour" placeholder="Adresse domicile ou depot">
+                                <datalist id="adresse-depart-retour"></datalist>
+                            </label>
                         </div>
 
                         <div id="capacityPreview" class="metrics"></div>
@@ -157,6 +162,6 @@
     </dialog>
 
     <div id="toast" class="toast hidden"></div>
-    <script src="app.js?v=20260709-2"></script>
+    <script src="app.js?v=20260715-1"></script>
 </body>
 </html>
