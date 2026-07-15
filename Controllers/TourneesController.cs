@@ -14,7 +14,9 @@ namespace Application_Camion_API.Controllers;
 public class TourneesController : ControllerBase
 {
     private const double CoutKmParVehiculeCharge = 0.25;
-    private const double DistanceRegroupementChargementKm = 15;
+    private const double DistanceRegroupementChargementKm = 45;
+    private const double MargePremierChargementKm = 20;
+    private const double MargeRegroupementAvantLivraisonKm = 15;
 
     private readonly ApplicationDbContext _context;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -446,6 +448,14 @@ public class TourneesController : ControllerBase
                 coordonneesEtapes,
                 coordonneesLivraisons);
 
+        candidats =
+            FiltrerCandidatsSelonZone(
+                candidats,
+                positionActuelle,
+                positionCle,
+                etapesChargees,
+                vehiculesCharges);
+
         foreach (CandidatOptimisation candidat in candidats
             .OrderBy(c => CalculerDistanceKmNullable(positionActuelle, c.Coordonnees))
             .ThenBy(c => c.Type == "Livraison" ? 0 : 1)
@@ -547,6 +557,14 @@ public class TourneesController : ControllerBase
 
             if (candidats.Count == 0)
                 break;
+
+            candidats =
+                FiltrerCandidatsSelonZone(
+                    candidats,
+                    positionActuelle,
+                    positionCle,
+                    etapesChargees,
+                    vehiculesCharges);
 
             CandidatOptimisation choisi = candidats
                 .OrderBy(c =>
@@ -694,6 +712,73 @@ public class TourneesController : ControllerBase
         return candidats;
     }
 
+    private static List<CandidatOptimisation> FiltrerCandidatsSelonZone(
+        List<CandidatOptimisation> candidats,
+        Coordonnees? positionActuelle,
+        string positionCle,
+        HashSet<int> etapesChargees,
+        List<Vehicule> vehiculesCharges)
+    {
+        if (positionActuelle == null)
+            return candidats;
+
+        var chargementsAvecDistance = candidats
+            .Where(c => c.Type == "Chargement" && c.Coordonnees != null)
+            .Select(c => new
+            {
+                Candidat = c,
+                DistanceKm = CalculerDistanceKm(positionActuelle, c.Coordonnees!)
+            })
+            .ToList();
+
+        if (chargementsAvecDistance.Count == 0)
+            return candidats;
+
+        if (positionCle == "DEPOT" &&
+            etapesChargees.Count == 0 &&
+            vehiculesCharges.Count == 0)
+        {
+            double distanceMin = chargementsAvecDistance.Min(c => c.DistanceKm);
+
+            return chargementsAvecDistance
+                .Where(c => c.DistanceKm <= distanceMin + MargePremierChargementKm)
+                .Select(c => c.Candidat)
+                .ToList();
+        }
+
+        if (!positionCle.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
+            return candidats;
+
+        var chargementsProches = chargementsAvecDistance
+            .Where(c => c.DistanceKm <= DistanceRegroupementChargementKm)
+            .ToList();
+
+        if (chargementsProches.Count == 0)
+            return candidats;
+
+        double distanceChargementProche =
+            chargementsProches.Min(c => c.DistanceKm);
+
+        var distancesLivraisons = candidats
+            .Where(c => c.Type == "Livraison" && c.Coordonnees != null)
+            .Select(c => CalculerDistanceKm(positionActuelle, c.Coordonnees!))
+            .ToList();
+
+        double distanceLivraisonProche = distancesLivraisons.Count == 0
+            ? double.MaxValue
+            : distancesLivraisons.Min();
+
+        if (distanceChargementProche <=
+            distanceLivraisonProche + MargeRegroupementAvantLivraisonKm)
+        {
+            return chargementsProches
+                .Select(c => c.Candidat)
+                .ToList();
+        }
+
+        return candidats;
+    }
+
     private static string ConstruireCleEtat(
         string positionCle,
         HashSet<int> etapesChargees,
@@ -788,7 +873,8 @@ public class TourneesController : ControllerBase
             !tournee.PlanOptimise.Contains("premiere livraison sur etage 1") ||
             !tournee.PlanOptimise.Contains("point depart / retour") ||
             !tournee.PlanOptimise.Contains("kilometres avec vehicules charges") ||
-            !tournee.PlanOptimise.Contains("meme zone de chargement"))
+            !tournee.PlanOptimise.Contains("meme zone de chargement") ||
+            !tournee.PlanOptimise.Contains("chargements proches avant livraison"))
         {
             await AppliquerOptimisationAsync(tournee);
         }
@@ -1101,6 +1187,7 @@ public class TourneesController : ControllerBase
             builder.AppendLine("La route est optimisee depuis le point depart / retour du chauffeur.");
             builder.AppendLine("La route limite aussi les kilometres avec vehicules charges pour eviter les detours inutiles.");
             builder.AppendLine("Les garages proches restent groupes dans la meme zone de chargement.");
+            builder.AppendLine("Les chargements proches sont faits avant de partir en livraison.");
             builder.AppendLine("A un meme chargement, le vehicule livre le plus tard est place avant celui qui sort plus tot.");
 
             for (int i = 0; i < ordreChargement.Count; i++)
