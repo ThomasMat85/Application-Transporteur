@@ -787,7 +787,8 @@ public class TourneesController : ControllerBase
             !tournee.PlanOptimise.Contains("Ordre de chargement camion") ||
             !tournee.PlanOptimise.Contains("premiere livraison sur etage 1") ||
             !tournee.PlanOptimise.Contains("point depart / retour") ||
-            !tournee.PlanOptimise.Contains("kilometres avec vehicules charges"))
+            !tournee.PlanOptimise.Contains("kilometres avec vehicules charges") ||
+            !tournee.PlanOptimise.Contains("meme zone de chargement"))
         {
             await AppliquerOptimisationAsync(tournee);
         }
@@ -1099,6 +1100,7 @@ public class TourneesController : ControllerBase
             builder.AppendLine("Principe : garder la premiere livraison sur etage 1, puis charger l'etage 2 en priorite.");
             builder.AppendLine("La route est optimisee depuis le point depart / retour du chauffeur.");
             builder.AppendLine("La route limite aussi les kilometres avec vehicules charges pour eviter les detours inutiles.");
+            builder.AppendLine("Les garages proches restent groupes dans la meme zone de chargement.");
             builder.AppendLine("A un meme chargement, le vehicule livre le plus tard est place avant celui qui sort plus tot.");
 
             for (int i = 0; i < ordreChargement.Count; i++)
