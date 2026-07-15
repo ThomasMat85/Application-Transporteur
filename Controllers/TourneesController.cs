@@ -13,6 +13,8 @@ namespace Application_Camion_API.Controllers;
 [ApiController]
 public class TourneesController : ControllerBase
 {
+    private const double CoutKmParVehiculeCharge = 0.25;
+
     private readonly ApplicationDbContext _context;
     private readonly IHttpClientFactory _httpClientFactory;
 
@@ -342,6 +344,7 @@ public class TourneesController : ControllerBase
             coordonneesDepartRetour,
             "DEPOT",
             0,
+            0,
             route,
             memoire,
             ref meilleure,
@@ -362,6 +365,7 @@ public class TourneesController : ControllerBase
         Coordonnees? positionActuelle,
         string positionCle,
         double distanceActuelle,
+        double scoreActuel,
         List<CandidatOptimisation> route,
         Dictionary<string, double> memoire,
         ref SolutionOptimisation meilleure,
@@ -371,19 +375,19 @@ public class TourneesController : ControllerBase
         if (visites++ > limiteVisites)
             return;
 
-        if (distanceActuelle >= meilleure.DistanceTotaleKm)
+        if (scoreActuel >= meilleure.ScoreTotal)
             return;
 
         string etatCle =
             ConstruireCleEtat(positionCle, etapesChargees, vehiculesCharges);
 
         if (memoire.TryGetValue(etatCle, out double distanceDejaVue) &&
-            distanceDejaVue <= distanceActuelle)
+            distanceDejaVue <= scoreActuel)
         {
             return;
         }
 
-        memoire[etatCle] = distanceActuelle;
+        memoire[etatCle] = scoreActuel;
 
         if (etapesChargees.Count == etapes.Count &&
             vehiculesCharges.Count == 0)
@@ -396,8 +400,13 @@ public class TourneesController : ControllerBase
                         coordonneesDepartRetour);
 
             double distanceTotale = distanceActuelle + distanceRetour;
+            double scoreTotal =
+                scoreActuel +
+                CalculerScoreSegment(distanceRetour, vehiculesCharges.Count);
 
-            if (distanceTotale < meilleure.DistanceTotaleKm)
+            if (scoreTotal < meilleure.ScoreTotal ||
+                (Math.Abs(scoreTotal - meilleure.ScoreTotal) < 0.001 &&
+                    distanceTotale < meilleure.DistanceTotaleKm))
             {
                 var arrets = route
                     .Select(CopierCandidat)
@@ -419,6 +428,7 @@ public class TourneesController : ControllerBase
                 meilleure = new SolutionOptimisation
                 {
                     DistanceTotaleKm = distanceTotale,
+                    ScoreTotal = scoreTotal,
                     Arrets = arrets
                 };
             }
@@ -445,8 +455,11 @@ public class TourneesController : ControllerBase
                 CalculerDistanceKmNullable(positionActuelle, candidat.Coordonnees);
 
             double nouvelleDistance = distanceActuelle + distance;
+            double nouveauScore =
+                scoreActuel +
+                CalculerScoreSegment(distance, vehiculesCharges.Count);
 
-            if (nouvelleDistance >= meilleure.DistanceTotaleKm)
+            if (nouveauScore >= meilleure.ScoreTotal)
                 continue;
 
             var prochainesEtapesChargees =
@@ -489,6 +502,7 @@ public class TourneesController : ControllerBase
                 candidat.Coordonnees,
                 candidat.Cle,
                 nouvelleDistance,
+                nouveauScore,
                 route,
                 memoire,
                 ref meilleure,
@@ -511,6 +525,7 @@ public class TourneesController : ControllerBase
         var arrets = new List<CandidatOptimisation>();
         Coordonnees? positionActuelle = coordonneesDepartRetour;
         double distanceTotale = 0;
+        double scoreTotal = 0;
 
         while (etapesChargees.Count < etapes.Count ||
             vehiculesCharges.Count > 0)
@@ -537,6 +552,7 @@ public class TourneesController : ControllerBase
                 CalculerDistanceKmNullable(positionActuelle, choisi.Coordonnees);
 
             distanceTotale += distance;
+            scoreTotal += CalculerScoreSegment(distance, vehiculesCharges.Count);
 
             CandidatOptimisation arret =
                 CopierCandidat(choisi);
@@ -570,6 +586,7 @@ public class TourneesController : ControllerBase
                 CalculerDistanceKmNullable(positionActuelle, coordonneesDepartRetour);
 
             distanceTotale += retour;
+            scoreTotal += CalculerScoreSegment(retour, vehiculesCharges.Count);
 
             arrets.Add(new CandidatOptimisation
             {
@@ -585,6 +602,7 @@ public class TourneesController : ControllerBase
         return new SolutionOptimisation
         {
             DistanceTotaleKm = distanceTotale,
+            ScoreTotal = scoreTotal,
             Arrets = arrets
         };
     }
@@ -697,6 +715,13 @@ public class TourneesController : ControllerBase
         return CalculerDistanceKm(depart, arrivee);
     }
 
+    private static double CalculerScoreSegment(
+        double distanceKm,
+        int nombreVehiculesCharges)
+    {
+        return distanceKm * (1 + Math.Max(0, nombreVehiculesCharges) * CoutKmParVehiculeCharge);
+    }
+
     private async Task AppliquerOptimisationAsync(Tournee tournee)
     {
         try
@@ -723,7 +748,8 @@ public class TourneesController : ControllerBase
         if (string.IsNullOrWhiteSpace(tournee.PlanOptimise) ||
             !tournee.PlanOptimise.Contains("Ordre de chargement camion") ||
             !tournee.PlanOptimise.Contains("premiere livraison sur etage 1") ||
-            !tournee.PlanOptimise.Contains("point depart / retour"))
+            !tournee.PlanOptimise.Contains("point depart / retour") ||
+            !tournee.PlanOptimise.Contains("kilometres avec vehicules charges"))
         {
             await AppliquerOptimisationAsync(tournee);
         }
@@ -1034,6 +1060,7 @@ public class TourneesController : ControllerBase
             builder.AppendLine("Ordre de chargement camion :");
             builder.AppendLine("Principe : garder la premiere livraison sur etage 1, puis charger l'etage 2 en priorite.");
             builder.AppendLine("La route est optimisee depuis le point depart / retour du chauffeur.");
+            builder.AppendLine("La route limite aussi les kilometres avec vehicules charges pour eviter les detours inutiles.");
             builder.AppendLine("A un meme chargement, le vehicule livre le plus tard est place avant celui qui sort plus tot.");
 
             for (int i = 0; i < ordreChargement.Count; i++)
@@ -1207,6 +1234,8 @@ public class TourneesController : ControllerBase
     private sealed class SolutionOptimisation
     {
         public double DistanceTotaleKm { get; set; } = double.MaxValue;
+
+        public double ScoreTotal { get; set; } = double.MaxValue;
 
         public List<CandidatOptimisation> Arrets { get; set; } = new();
     }
