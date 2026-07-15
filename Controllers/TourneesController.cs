@@ -234,6 +234,9 @@ public class TourneesController : ControllerBase
         resultat.Alertes.Add(
             "Optimisation indicative : elle aide a preparer l'ordre, mais le chauffeur garde la decision finale sur le terrain.");
 
+        resultat.Alertes.Add(
+            "Les livraisons deja chargees sont priorisees quand elles restent dans une distance raisonnable.");
+
         var etapesRestantes = tournee.Etapes
             .OrderBy(e => e.Ordre)
             .ToList();
@@ -294,10 +297,7 @@ public class TourneesController : ControllerBase
                     : CalculerDistanceKm(positionActuelle, candidat.Coordonnees);
             }
 
-            var choisi = candidats
-                .OrderBy(c => c.Coordonnees == null ? 1 : 0)
-                .ThenBy(c => c.DistanceDepuisPrecedentKm)
-                .First();
+            var choisi = ChoisirProchainArret(candidats, positionActuelle);
 
             resultat.Arrets.Add(new OptimisationArretDto
             {
@@ -335,6 +335,75 @@ public class TourneesController : ControllerBase
         resultat.Chargement = CreerPlanChargement(tournee);
 
         return resultat;
+    }
+
+    private static CandidatOptimisation ChoisirProchainArret(
+        List<CandidatOptimisation> candidats,
+        Coordonnees? positionActuelle)
+    {
+        if (positionActuelle != null)
+        {
+            var livraisons = candidats
+                .Where(c => c.Type == "Livraison")
+                .ToList();
+
+            if (livraisons.Count > 0)
+            {
+                var meilleureLivraison =
+                    TrierCandidats(livraisons).First();
+
+                var chargements = candidats
+                    .Where(c => c.Type == "Chargement")
+                    .ToList();
+
+                if (chargements.Count == 0)
+                    return meilleureLivraison;
+
+                var meilleurChargement =
+                    TrierCandidats(chargements).First();
+
+                if (DoitPrioriserLivraison(
+                    meilleureLivraison,
+                    meilleurChargement))
+                {
+                    return meilleureLivraison;
+                }
+            }
+        }
+
+        return TrierCandidats(candidats).First();
+    }
+
+    private static IOrderedEnumerable<CandidatOptimisation> TrierCandidats(
+        IEnumerable<CandidatOptimisation> candidats)
+    {
+        return candidats
+            .OrderBy(c => c.Coordonnees == null ? 1 : 0)
+            .ThenBy(c => c.DistanceDepuisPrecedentKm)
+            .ThenBy(c => c.Type == "Livraison" ? 0 : 1)
+            .ThenBy(c => c.Nom);
+    }
+
+    private static bool DoitPrioriserLivraison(
+        CandidatOptimisation livraison,
+        CandidatOptimisation chargement)
+    {
+        if (livraison.Coordonnees != null && chargement.Coordonnees == null)
+            return true;
+
+        if (livraison.Coordonnees == null && chargement.Coordonnees != null)
+            return false;
+
+        if (livraison.Coordonnees == null && chargement.Coordonnees == null)
+            return true;
+
+        const double ratioDetourAcceptable = 1.35;
+
+        if (chargement.DistanceDepuisPrecedentKm <= 0.1)
+            return livraison.DistanceDepuisPrecedentKm <= 2;
+
+        return livraison.DistanceDepuisPrecedentKm <=
+            chargement.DistanceDepuisPrecedentKm * ratioDetourAcceptable;
     }
 
     private async Task AppliquerOptimisationAsync(Tournee tournee)
@@ -384,7 +453,8 @@ public class TourneesController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(tournee.PlanOptimise) ||
             !tournee.PlanOptimise.Contains("Ordre de chargement camion") ||
-            !tournee.PlanOptimise.Contains("premiere livraison sur etage 1"))
+            !tournee.PlanOptimise.Contains("premiere livraison sur etage 1") ||
+            !tournee.PlanOptimise.Contains("livraisons deja chargees"))
         {
             await AppliquerOptimisationAsync(tournee);
         }
@@ -690,6 +760,7 @@ public class TourneesController : ControllerBase
             builder.AppendLine();
             builder.AppendLine("Ordre de chargement camion :");
             builder.AppendLine("Principe : garder la premiere livraison sur etage 1, puis charger l'etage 2 en priorite.");
+            builder.AppendLine("La route favorise une livraison deja chargee si elle reste dans une distance raisonnable.");
             builder.AppendLine("A un meme chargement, le vehicule livre le plus tard est place avant celui qui sort plus tot.");
 
             for (int i = 0; i < ordreChargement.Count; i++)
