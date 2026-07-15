@@ -4,6 +4,13 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
+Environment.SetEnvironmentVariable(
+    "DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE",
+    "false");
+
+Environment.SetEnvironmentVariable(
+    "DOTNET_USE_POLLING_FILE_WATCHER",
+    "1");
 
 var builder = WebApplication.CreateBuilder(args);
 
