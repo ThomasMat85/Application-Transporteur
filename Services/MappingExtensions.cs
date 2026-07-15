@@ -14,6 +14,7 @@ public static class MappingExtensions
             DateCreation = tournee.DateCreation,
             Terminee = tournee.Terminee,
             PlanOptimise = tournee.PlanOptimise,
+            AdresseDepartRetour = tournee.AdresseDepartRetour,
             CamionPorteurId = tournee.CamionPorteurId,
             CamionPorteur = tournee.CamionPorteur?.ToDto(),
             Etapes = tournee.Etapes

@@ -12,6 +12,8 @@ public class TourneeDto
 
     public string PlanOptimise { get; set; } = "";
 
+    public string AdresseDepartRetour { get; set; } = "";
+
     public int? CamionPorteurId { get; set; }
 
     public CamionPorteurDto? CamionPorteur { get; set; }

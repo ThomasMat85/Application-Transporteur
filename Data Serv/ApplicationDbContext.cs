@@ -71,6 +71,10 @@ public class ApplicationDbContext : DbContext
             .IsRequired();
 
         modelBuilder.Entity<Tournee>()
+            .Property(t => t.AdresseDepartRetour)
+            .HasDefaultValue("");
+
+        modelBuilder.Entity<Tournee>()
             .HasIndex(t => t.CodeUnique)
             .IsUnique();
 
