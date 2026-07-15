@@ -1,3 +1,5 @@
+using Application_Camion_API.Data;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -5,6 +7,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Application_Camion_API.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(ApplicationDbContext))]
+    [Migration("20260715121000_AddTourneeDepotAddress")]
     public partial class AddTourneeDepotAddress : Migration
     {
         /// <inheritdoc />
